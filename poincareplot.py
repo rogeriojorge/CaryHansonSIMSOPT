@@ -1,7 +1,7 @@
 import numpy as np
 import simsgeopp as sgpp
 
-def compute_field_lines(biotsavart, nperiods=200, batch_size=8, magnetic_axis_radius=1, max_thickness=0.5, delta=0.01, steps_per_period=100):
+def compute_field_lines(magField, nperiods=200, batch_size=8, magnetic_axis_radius=1, max_thickness=0.5, delta=0.01, steps_per_period=100):
 
     def cylindrical_to_cartesian(rphiz):
         xyz = np.zeros(rphiz.shape)
@@ -9,10 +9,6 @@ def compute_field_lines(biotsavart, nperiods=200, batch_size=8, magnetic_axis_ra
         xyz[:, 1] = rphiz[:, 0] * np.sin(rphiz[:, 1])
         xyz[:, 2] = rphiz[:, 2]
         return xyz
-
-    gammas                 = [coil.gamma() for coil in biotsavart.coils]
-    dgamma_by_dphis        = [coil.gammadash() for coil in biotsavart.coils]
-    largest = [0.]
 
     def rhs(phi, rz):
         nparticles = rz.shape[0]//2
@@ -25,7 +21,8 @@ def compute_field_lines(biotsavart, nperiods=200, batch_size=8, magnetic_axis_ra
         rphiz[:, 2] = rz[:, 1]
         xyz = cylindrical_to_cartesian(rphiz)
 
-        Bxyz = sgpp.biot_savart_B(xyz, gammas, dgamma_by_dphis, biotsavart.coil_currents)
+        magField.set_points(xyz)
+        Bxyz = magField.B()
 
         rhs_xyz = np.zeros((nparticles, 3))
         rhs_xyz[:, 0] = Bxyz[:, 0]
@@ -34,15 +31,15 @@ def compute_field_lines(biotsavart, nperiods=200, batch_size=8, magnetic_axis_ra
 
         # Two different ways of deriving the rhs.
         if False:
-            rhs_phi = (np.cos(phi) * Bxyz[:, 1] - np.sin(phi)*Bxyz[:, 0])/rphiz[:, 0]
+            rhs_phi = (np.cos(phi) * rhs_xyz[:, 1] - np.sin(phi)*rhs_xyz[:, 0])/rphiz[:, 0]
             rhs_rz = np.zeros((nparticles, 2))
             rhs_rz[:, 0] = (rhs_xyz[:, 0] * np.cos(phi) + rhs_xyz[:, 1] * np.sin(phi))/rhs_phi
             rhs_rz[:, 1] = rhs_xyz[:, 2]/rhs_phi
             return rhs_rz.flatten()
         else:
-            B_phi = (np.cos(phi) * Bxyz[:, 1] - np.sin(phi)*Bxyz[:, 0])
-            B_r = np.cos(phi) * Bxyz[:, 0] + np.sin(phi)*Bxyz[:, 1]
-            B_z = Bxyz[:, 2]
+            B_phi = (np.cos(phi) * rhs_xyz[:, 1] - np.sin(phi)*rhs_xyz[:, 0])
+            B_r = np.cos(phi) * rhs_xyz[:, 0] + np.sin(phi)*rhs_xyz[:, 1]
+            B_z = rhs_xyz[:, 2]
             rhs_rz = np.zeros(rz.shape)
             rhs_rz[:, 0] = rphiz[:, 0] * B_r/B_phi
             rhs_rz[:, 1] = rphiz[:, 0] * B_z/B_phi
@@ -100,7 +97,8 @@ def compute_field_lines(biotsavart, nperiods=200, batch_size=8, magnetic_axis_ra
 
     absB = np.zeros((nparticles, nt))
     for j in range(nparticles):
-        tmp = sgpp.biot_savart_B(xyz[j, :, :], gammas, dgamma_by_dphis, biotsavart.coil_currents)
+        magField.set_points(xyz[j, :, :])
+        tmp = magField.B()
         absB[j, :] = np.linalg.norm(tmp, axis=1)
 
     return rphiz, xyz, absB, phi_no_mod[:-1]
