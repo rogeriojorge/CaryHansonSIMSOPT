@@ -1,20 +1,28 @@
 #!/usr/bin/env python3
-from simsopt.geo.magneticfield import ToroidalField, HelicalField
+from simsopt.geo.magneticfieldclasses import ToroidalField
+from simsopt.geo.curvehelical import CurveHelical
+from simsopt.geo.biotsavart import BiotSavart
 from poincareplot import compute_field_lines
 import matplotlib.pyplot as plt
+from math import pi
 import numpy as np
 ############################################
 spp           = 150    # number of phi steps for one stellarator revolution
-nperiods      = 50     # how often to go around the stellarator
-batch_size    = 6      # how many field lines are traced at the same time
-max_thickness = 0.05   # how far out from the magnetic axis are we going
-delta         = 0.0015 # distance between starting points of fieldlines
-magnetic_axis_radius = 0.98
+nperiods      = 250     # how often to go around the stellarator
+batch_size    = 5      # how many field lines are traced at the same time
+max_thickness = 0.04   # how far out from the magnetic axis are we going
+delta         = 0.001 # distance between starting points of fieldlines
+magnetic_axis_radius = 0.983
 qvfilename    = 'CaryHanson'
 ResultsFolder = 'Results'
 ############################################
-BField=HelicalField()
-# BField=ToroidalField(1,1)
+coils     = [CurveHelical(300, 2, 5, 2, 1., 0.3) for i in range(2)]
+coils[0].set_dofs(np.concatenate(([0,0],[0,0])))
+coils[1].set_dofs(np.concatenate(([np.pi/2,0],[0,0])))
+currents  = [-3.07e5,3.07e5]
+Bhelical  = BiotSavart(coils, currents)
+Btoroidal = ToroidalField(1.0,1.0)
+BField    = Bhelical+Btoroidal
 
 ######### COMPUTE POINCARE PLOT ############
 rphiz, xyz, absB, phi_no_mod = compute_field_lines(BField, nperiods=nperiods, batch_size=batch_size, magnetic_axis_radius=magnetic_axis_radius, max_thickness=max_thickness, delta=delta, steps_per_period=spp)
@@ -29,7 +37,7 @@ plt.savefig(ResultsFolder+'/'+qvfilename + "absB.png", dpi=300)
 plt.close()
 
 ########### SAVE POINCARE PLOT ############
-NFP=BField.nfp
+NFP=5
 for k in range(4):
     plt.figure()
     for i in range(nparticles):
@@ -53,7 +61,7 @@ for i in range(nparticles):
     data3[:, 2*i+1] = rphiz[i, range(3*spp//(NFP*4), nperiods*spp, spp), 2]
 
 import mayavi.mlab as mlab
-mlab.options.offscreen = False # Show on screen or not
+mlab.options.offscreen = True # Show on screen or not
 fig = mlab.figure(bgcolor=(1,1,1))
 for count, coil in enumerate(BField.coils):
 	if count==0:
